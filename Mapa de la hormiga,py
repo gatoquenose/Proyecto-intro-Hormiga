@@ -1,0 +1,80 @@
+import tkinter as tk
+
+class SimulacionHormigaApp:
+    def __init__(self, root):
+        self.root = root
+        self.ANCHO_VENTANA = 800
+        self.ALTO_VENTANA = 600
+        self.estado_actual = 'inicio'
+        self.configurar_ventana_principal()
+        self.mostrar_pantalla_actual()
+
+    def configurar_ventana_principal(self):
+        self.root.geometry(f"{self.ANCHO_VENTANA}x{self.ALTO_VENTANA}")
+        self.root.title("Simulación Hormiga")
+
+    def cambiar_estado(self, nuevo_estado):
+        self.estado_actual = nuevo_estado
+        self.mostrar_pantalla_actual()
+
+    def mostrar_pantalla_actual(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        if self.estado_actual == 'inicio':
+            self.mostrar_pantalla_inicio()
+        elif self.estado_actual == 'tamanio':
+            self.mostrar_pantalla_tamanio()
+
+    def mostrar_pantalla_inicio(self):
+        label = tk.Label(self.root, text="Simulación Hormiga", font=("Arial", 24))
+        label.pack(pady=20)
+
+        boton_tamanio = tk.Button(self.root, text="Elegir tamaño", font=("Arial", 16), command=self.abrir_tamanio, width=20, height=2, bg="blue", fg="white")
+        boton_tamanio.pack(pady=10)
+
+        boton_estadisticas = tk.Button(self.root, text="Estadísticas", font=("Arial", 16), command=self.estadisticas, width=20, height=2, bg="blue", fg="white")
+        boton_estadisticas.pack(pady=10)
+
+        boton_configuracion = tk.Button(self.root, text="Configuración", font=("Arial", 16), command=self.configuracion, width=20, height=2, bg="blue", fg="white")
+        boton_configuracion.pack(pady=10)
+
+    def abrir_tamanio(self):
+        self.root.withdraw()  # Oculta la ventana principal
+        ventana_tamanio = tk.Toplevel()
+        ventana_tamanio.geometry(f"{self.ANCHO_VENTANA}x{self.ALTO_VENTANA}")
+        ventana_tamanio.title("Elegir Tamaño")
+
+        label = tk.Label(ventana_tamanio, text="Elegir Tamaño", font=("Arial", 24))
+        label.pack(pady=20)
+
+        boton_4x4 = tk.Button(ventana_tamanio, text="4x4", font=("Arial", 16), command=lambda: self.elegir_tamanio(4, ventana_tamanio), width=20, height=2, bg="blue", fg="white")
+        boton_4x4.pack(pady=10)
+
+        boton_5x5 = tk.Button(ventana_tamanio, text="5x5", font=("Arial", 16), command=lambda: self.elegir_tamanio(5, ventana_tamanio), width=20, height=2, bg="blue", fg="white")
+        boton_5x5.pack(pady=10)
+
+        boton_6x6 = tk.Button(ventana_tamanio, text="6x6", font=("Arial", 16), command=lambda: self.elegir_tamanio(6, ventana_tamanio), width=20, height=2, bg="blue", fg="white")
+        boton_6x6.pack(pady=10)
+
+        boton_volver = tk.Button(ventana_tamanio, text="Volver", font=("Arial", 16), command=lambda: self.volver_a_principal(ventana_tamanio), width=20, height=2, bg="red", fg="white")
+        boton_volver.pack(pady=10)
+
+    def volver_a_principal(self, ventana):
+        ventana.destroy()  # Cierra la ventana secundaria
+        self.root.deiconify()  # Vuelve a mostrar la ventana principal
+
+    def elegir_tamanio(self, tamano, ventana):
+        print(f"{tamano}x{tamano} elegido")
+        self.volver_a_principal(ventana)
+
+    def estadisticas(self):
+        print("Estadísticas presionado")
+
+    def configuracion(self):
+        print("Configuración presionado")
+
+# Configuración de la ventana principal
+root = tk.Tk()
+app = SimulacionHormigaApp(root)
+root.mainloop()
