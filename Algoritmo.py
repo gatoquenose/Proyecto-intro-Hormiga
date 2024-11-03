@@ -1,6 +1,6 @@
 import random
-from item import Hormiga
-from Laberinto import Laberinto
+import json 
+
 class AlgoritmoGenetico:
     def __init__(self, laberinto, pop_size=10, generations=100, sequence_length=20, mutation_rate=0.1):
         self.laberinto = laberinto
