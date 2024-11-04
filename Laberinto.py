@@ -28,6 +28,9 @@ class Laberinto:
             'final': {'clase': None, 'cantidad': 1, 'params': {}},
             'vacio': {'clase': None, 'cantidad': None, 'params': {}}
         }
+        self.estado_inicial = None  # Para guardar el estado inicial del laberinto
+        self.posiciones_iniciales = {}  # Para guardar las posiciones iniciales de los objetos
+        self.simulacion_iniciada = False  # Nueva variable
 
     def configurar_ventana_principal(self):
         self.ventana.geometry(f"{self.ANCHO_VENTANA}x{self.ALTO_VENTANA}")
@@ -148,6 +151,9 @@ class Laberinto:
                 self.imagenes[nombre] = ImageTk.PhotoImage(imagen_blanca)
 
     def crear_matriz(self, size):
+        # Reiniciar la bandera de simulación iniciada
+        self.simulacion_iniciada = False
+        
         # Reiniciar los valores de los objetos disponibles
         self.objetos_disponibles = {
             'azucar': {'clase': Azucar, 'cantidad': 2, 'params': {'puntos': 10}},
@@ -227,6 +233,9 @@ class Laberinto:
             self.objeto_seleccionado = nombre
 
     def colocar_objeto(self, fila, columna):
+        if self.simulacion_iniciada:  # Si la simulación está iniciada, no permitir cambios
+            return
+        
         if hasattr(self, 'objeto_seleccionado'):
             datos = self.objetos_disponibles[self.objeto_seleccionado]
             if datos['cantidad'] > 0:
@@ -307,6 +316,9 @@ class Laberinto:
         if not self.validar_laberinto():
             return
         
+        # Marcar que la simulación ha iniciado
+        self.simulacion_iniciada = True
+        
         # Encontrar la posición inicial de la hormiga
         posicion_hormiga = None
         for i in range(self.size):
@@ -323,11 +335,15 @@ class Laberinto:
 
         # Inicializar variables de simulación
         self.hormiga = self.matriz_objetos[posicion_hormiga[0]][posicion_hormiga[1]]
+        self.posicion_actual = posicion_hormiga
         self.posicion_inicial = posicion_hormiga
         self.mejor_puntuacion = float('-inf')
         self.mejor_ruta = None
         self.intento_actual = 0
         self.max_intentos = 100
+        
+        # Guardar las posiciones iniciales antes de iniciar la simulación
+        self.guardar_estado_inicial()
         
         # Agregar botones de control
         self.crear_controles_simulacion()
@@ -369,8 +385,11 @@ class Laberinto:
         self.label_mejor.pack(side=tk.LEFT, padx=5)
 
     def iniciar_nuevo_intento(self):
-        # Reiniciar el laberinto
-        self.reiniciar_laberinto()
+        # Reiniciar el laberinto al estado inicial
+        self.restaurar_posiciones()
+        
+        # Asegurarse de que la posición actual sea la inicial
+        self.posicion_actual = self.posicion_inicial
         
         self.intento_actual += 1
         self.label_intento.config(text=f"Intento: {self.intento_actual}")
@@ -384,6 +403,14 @@ class Laberinto:
         self.boton_pausar.config(state=tk.NORMAL)
         self.boton_continuar.config(state=tk.DISABLED)
         
+        # Reiniciar estados de la hormiga
+        self.hormiga.salud = 100
+        self.hormiga.nivel_alcohol = 0
+        self.hormiga.puntos = 0
+        
+        self.actualizar_estado_hormiga()
+        
+        # Iniciar la ejecución de turnos
         self.ejecutar_turno()
 
     def reiniciar_laberinto(self):
@@ -440,13 +467,17 @@ class Laberinto:
         self.indice_secuencia += 1
 
         if accion == "comer":
-            self.hormiga.interactuar_con_objeto(self)
-            self.actualizar_estado_hormiga()  # Actualizar después de comer
+            resultado = self.hormiga.interactuar_con_objeto(self)
+            self.actualizar_estado_hormiga()
+            if resultado == "veneno":
+                self.restaurar_posiciones()
+                self.reiniciar_estados_hormiga()
+                return
         else:
             nueva_posicion = self.hormiga.calcular_nueva_posicion(accion)
             if self.hormiga.es_movimiento_valido(nueva_posicion, self):
                 self.mover_hormiga(nueva_posicion)
-                self.actualizar_estado_hormiga()  # Actualizar después de moverse
+                self.actualizar_estado_hormiga()
 
         # Verificar si llegó al final
         fila, columna = self.posicion_actual
@@ -472,6 +503,37 @@ class Laberinto:
                           f"Puntos: {self.hormiga.puntos}\n"
                           f"Nivel de alcohol: {self.hormiga.nivel_alcohol}\n"
                           f"Pasos: {self.indice_secuencia}")
+        
+        # Restaurar el laberinto a su estado inicial
+        self.restaurar_posiciones()
+        
+        # Reiniciar estados de la hormiga
+        self.hormiga.salud = 100
+        self.hormiga.nivel_alcohol = 0
+        self.hormiga.puntos = 0
+        
+        # Actualizar las etiquetas una sola vez después de reiniciar
+        try:
+            if hasattr(self, 'label_salud'):
+                self.label_salud.config(text=f"Salud: {self.hormiga.salud}")
+                self.label_alcohol.config(text=f"Alcohol: {self.hormiga.nivel_alcohol}")
+                self.label_puntos.config(text=f"Puntos: {self.hormiga.puntos}")
+        except tk.TclError:
+            pass  # Si las etiquetas no existen, simplemente continuamos
+
+    def reiniciar_estados_hormiga(self):
+        # Reiniciar estados de la hormiga
+        self.hormiga.salud = 100
+        self.hormiga.nivel_alcohol = 0
+        self.hormiga.puntos = 0
+        
+        # Solo actualizar las etiquetas si existen
+        if hasattr(self, 'label_salud'):
+            self.label_salud.config(text=f"Salud: {self.hormiga.salud}")
+        if hasattr(self, 'label_alcohol'):
+            self.label_alcohol.config(text=f"Alcohol: {self.hormiga.nivel_alcohol}")
+        if hasattr(self, 'label_puntos'):
+            self.label_puntos.config(text=f"Puntos: {self.hormiga.puntos}")
 
     def finalizar_simulacion(self):
         self.simulacion_activa = False
@@ -484,25 +546,29 @@ class Laberinto:
                               "No se encontró una ruta exitosa")
 
     def actualizar_estado_hormiga(self):
-        # Crear o actualizar frame de estado si no existe
-        if not hasattr(self, 'frame_estado'):
+        try:
+            # Si las etiquetas existen, actualizar sus valores
+            if hasattr(self, 'label_salud'):
+                self.label_salud.config(text=f"Salud: {self.hormiga.salud}")
+                self.label_alcohol.config(text=f"Alcohol: {self.hormiga.nivel_alcohol}")
+                self.label_puntos.config(text=f"Puntos: {self.hormiga.puntos}")
+        except tk.TclError:
+            # Si hay error al actualizar las etiquetas, crear nuevas
+            if hasattr(self, 'frame_estado'):
+                self.frame_estado.destroy()
+            
+            # Crear nuevo frame y etiquetas
             self.frame_estado = tk.Frame(self.ventana)
             self.frame_estado.grid(row=self.size+3, column=0, columnspan=self.size+1, pady=5)
             
-            # Crear etiquetas para mostrar el estado
-            self.label_salud = tk.Label(self.frame_estado, text="Salud: 100")
+            self.label_salud = tk.Label(self.frame_estado, text=f"Salud: {self.hormiga.salud}")
             self.label_salud.pack(side=tk.LEFT, padx=5)
             
-            self.label_alcohol = tk.Label(self.frame_estado, text="Alcohol: 0")
+            self.label_alcohol = tk.Label(self.frame_estado, text=f"Alcohol: {self.hormiga.nivel_alcohol}")
             self.label_alcohol.pack(side=tk.LEFT, padx=5)
             
-            self.label_puntos = tk.Label(self.frame_estado, text="Puntos: 0")
+            self.label_puntos = tk.Label(self.frame_estado, text=f"Puntos: {self.hormiga.puntos}")
             self.label_puntos.pack(side=tk.LEFT, padx=5)
-        
-        # Actualizar valores
-        self.label_salud.config(text=f"Salud: {self.hormiga.salud}")
-        self.label_alcohol.config(text=f"Alcohol: {self.hormiga.nivel_alcohol}")
-        self.label_puntos.config(text=f"Puntos: {self.hormiga.puntos}")
 
     def generar_secuencia_movimientos(self):
         # Lista de posibles acciones
@@ -542,6 +608,68 @@ class Laberinto:
         
         # Actualizar la posición de la hormiga
         self.hormiga.posicion = nueva_posicion
+
+    def guardar_estado_inicial(self):
+        # Guardar una copia del estado inicial de la matriz
+        self.estado_inicial = []
+        self.posiciones_iniciales = {}  # Reiniciar el diccionario
+        
+        for i in range(self.size):
+            fila = []
+            for j in range(self.size):
+                objeto = self.matriz_objetos[i][j]
+                tipo_objeto = 'vacio'
+                
+                if isinstance(objeto, Hormiga):
+                    tipo_objeto = 'hormiga'
+                elif isinstance(objeto, Azucar):
+                    tipo_objeto = 'azucar'
+                elif isinstance(objeto, Vino):
+                    tipo_objeto = 'vino'
+                elif isinstance(objeto, Veneno):
+                    tipo_objeto = 'veneno'
+                elif objeto == 'final':
+                    tipo_objeto = 'final'
+                elif objeto == 'piedra':
+                    tipo_objeto = 'piedra'
+                
+                fila.append({
+                    'tipo': tipo_objeto,
+                    'objeto': objeto
+                })
+                
+                # Guardar posiciones de objetos importantes
+                if tipo_objeto != 'vacio':
+                    self.posiciones_iniciales[(i, j)] = {
+                        'tipo': tipo_objeto,
+                        'objeto': objeto
+                    }
+            
+            self.estado_inicial.append(fila)
+
+    def restaurar_posiciones(self):
+        # Primero limpiamos todas las casillas
+        for i in range(self.size):
+            for j in range(self.size):
+                boton = self.ventana.grid_slaves(row=i, column=j+1)[0]
+                boton.config(image=self.imagenes['vacio'])
+                boton.image = self.imagenes['vacio']
+                self.matriz_objetos[i][j] = None
+                boton.info['tipo'] = 'vacio'
+                boton.info['objeto'] = None
+
+        # Luego restauramos los objetos a sus posiciones iniciales
+        for (i, j), datos in self.posiciones_iniciales.items():
+            boton = self.ventana.grid_slaves(row=i, column=j+1)[0]
+            tipo = datos['tipo']
+            objeto = datos['objeto']
+            
+            # Usar el tipo para obtener la imagen correcta
+            boton.config(image=self.imagenes[tipo])
+            boton.image = self.imagenes[tipo]
+            self.matriz_objetos[i][j] = objeto
+            boton.info['tipo'] = tipo
+            boton.info['objeto'] = objeto
 
 if __name__ == "__main__":
     ventana = tk.Tk()
