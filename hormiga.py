@@ -230,19 +230,21 @@ class Hormiga:
         
         if isinstance(objeto, Veneno):
             self.salud = 0
+            laberinto.matriz_objetos[fila][columna] = None
             return "veneno"
         elif isinstance(objeto, Azucar):
-            self.puntos += 10
+            self.puntos += 200
             laberinto.matriz_objetos[fila][columna] = None
+            # Actualizar etiquetas
+            laberinto.label_puntuacion.config(text=f"Puntuación: {self.puntos}")
+            return "azucar"
         elif isinstance(objeto, Vino):
-            if self.nivel_alcohol < 30:
-                self.modificar_nivel_alcohol(5)
-                self.puntos += 5
-                laberinto.matriz_objetos[fila][columna] = None
-        elif isinstance(objeto, Veneno):
-            self.modificar_salud(-20)
-            self.puntos -= 5
+            self.nivel_alcohol += 50
             laberinto.matriz_objetos[fila][columna] = None
+            # Actualizar etiquetas
+            laberinto.label_alcohol.config(text=f"Nivel de alcohol: {self.nivel_alcohol}")
+            return "vino"
+        return None
 
     def modificar_salud(self, cantidad):
         self.salud = max(0, min(100, self.salud + cantidad))

@@ -20,8 +20,8 @@ class Laberinto:
         self.imagenes = {}
         self.cargar_imagenes()
         self.objetos_disponibles = {
-            'azucar': {'clase': Azucar, 'cantidad': 2, 'params': {'puntos': 10}},
-            'vino': {'clase': Vino, 'cantidad': 2, 'params': {'nivel_alcohol': 5}},
+            'azucar': {'clase': Azucar, 'cantidad': 2, 'params': {'puntos': 200}},
+            'vino': {'clase': Vino, 'cantidad': 2, 'params': {'nivel_alcohol': 50}},
             'veneno': {'clase': Veneno, 'cantidad': 2, 'params': {}},
             'hormiga': {'clase': Hormiga, 'cantidad': 1, 'params': {'posicion': (0,0)}},
             'piedra': {'clase': None, 'cantidad': 3, 'params': {}},
@@ -122,15 +122,12 @@ class Laberinto:
         # Verificar si los archivos existen antes de cargarlos
         for nombre, ruta in nombres_imagenes.items():
             try:
-                # Imprimir la ruta para debugging
-                print(f"Intentando cargar: {ruta}")
                 
-                # Verificar si el archivo existe
                 if os.path.exists(ruta):
                     imagen = Image.open(ruta)
                     imagen = imagen.resize((80, 80))
                     self.imagenes[nombre] = ImageTk.PhotoImage(imagen)
-                    print(f"Imagen {nombre} cargada exitosamente")
+                    
                 else:
                     print(f"El archivo no existe: {ruta}")
                     # Buscar el archivo en el directorio
@@ -146,7 +143,6 @@ class Laberinto:
                     self.imagenes[nombre] = ImageTk.PhotoImage(imagen_blanca)
                     
             except Exception as e:
-                print(f"Error cargando {nombre}: {str(e)}")
                 imagen_blanca = Image.new('RGB', (80, 80), 'white')
                 self.imagenes[nombre] = ImageTk.PhotoImage(imagen_blanca)
 
@@ -156,8 +152,8 @@ class Laberinto:
         
         # Reiniciar los valores de los objetos disponibles
         self.objetos_disponibles = {
-            'azucar': {'clase': Azucar, 'cantidad': 2, 'params': {'puntos': 10}},
-            'vino': {'clase': Vino, 'cantidad': 2, 'params': {'nivel_alcohol': 5}},
+            'azucar': {'clase': Azucar, 'cantidad': 2, 'params': {'puntos': 200}},
+            'vino': {'clase': Vino, 'cantidad': 2, 'params': {'nivel_alcohol': 50}},
             'veneno': {'clase': Veneno, 'cantidad': 2, 'params': {}},
             'hormiga': {'clase': Hormiga, 'cantidad': 1, 'params': {'posicion': (0,0)}},
             'piedra': {'clase': None, 'cantidad': 3, 'params': {}},
@@ -320,32 +316,28 @@ class Laberinto:
         self.simulacion_iniciada = True
         
         # Encontrar la posición inicial de la hormiga
-        posicion_hormiga = None
+        self.posicion_inicial = None
         for i in range(self.size):
             for j in range(self.size):
                 if isinstance(self.matriz_objetos[i][j], Hormiga):
-                    posicion_hormiga = (i, j)
+                    self.posicion_inicial = (i, j)
+                    self.hormiga = self.matriz_objetos[i][j]
+                    self.hormiga.posicion = (i, j)  # Asegurarnos que la hormiga conoce su posición
                     break
-            if posicion_hormiga:
+            if self.posicion_inicial:
                 break
 
-        if not posicion_hormiga:
-            messagebox.showerror("Error", "No se encontró la hormiga en el laberinto")
-            return
-
         # Inicializar variables de simulación
-        self.hormiga = self.matriz_objetos[posicion_hormiga[0]][posicion_hormiga[1]]
-        self.posicion_actual = posicion_hormiga
-        self.posicion_inicial = posicion_hormiga
+        self.posicion_actual = self.posicion_inicial
         self.mejor_puntuacion = float('-inf')
         self.mejor_ruta = None
         self.intento_actual = 0
         self.max_intentos = 100
         
-        # Guardar las posiciones iniciales antes de iniciar la simulación
+        # Guardar estado inicial
         self.guardar_estado_inicial()
         
-        # Agregar botones de control
+        # Crear controles de simulación
         self.crear_controles_simulacion()
         
         # Iniciar primer intento
@@ -354,13 +346,6 @@ class Laberinto:
     def crear_controles_simulacion(self):
         frame_controles = tk.Frame(self.ventana)
         frame_controles.grid(row=self.size+2, column=0, columnspan=self.size+1, pady=10)
-
-        self.boton_siguiente = tk.Button(
-            frame_controles,
-            text="Siguiente Intento",
-            command=self.iniciar_nuevo_intento
-        )
-        self.boton_siguiente.pack(side=tk.LEFT, padx=5)
 
         self.boton_pausar = tk.Button(
             frame_controles,
@@ -381,15 +366,19 @@ class Laberinto:
         self.label_intento = tk.Label(frame_controles, text="Intento: 0")
         self.label_intento.pack(side=tk.LEFT, padx=5)
         
-        self.label_mejor = tk.Label(frame_controles, text="Mejor puntuación: 0")
-        self.label_mejor.pack(side=tk.LEFT, padx=5)
+        self.label_puntuacion = tk.Label(frame_controles, text="Puntuación: 0")
+        self.label_puntuacion.pack(side=tk.LEFT, padx=5)
+        
+        self.label_alcohol = tk.Label(frame_controles, text="Nivel de alcohol: 0")
+        self.label_alcohol.pack(side=tk.LEFT, padx=5)
 
     def iniciar_nuevo_intento(self):
-        # Reiniciar el laberinto al estado inicial
+        # Restaurar el laberinto al estado inicial
         self.restaurar_posiciones()
         
         # Asegurarse de que la posición actual sea la inicial
         self.posicion_actual = self.posicion_inicial
+        self.hormiga.posicion = self.posicion_inicial
         
         self.intento_actual += 1
         self.label_intento.config(text=f"Intento: {self.intento_actual}")
@@ -398,16 +387,19 @@ class Laberinto:
         self.secuencia_actual = self.generar_secuencia_movimientos()
         self.indice_secuencia = 0
         
-        self.simulacion_activa = True
-        self.pausado = False
-        self.boton_pausar.config(state=tk.NORMAL)
-        self.boton_continuar.config(state=tk.DISABLED)
-        
         # Reiniciar estados de la hormiga
         self.hormiga.salud = 100
         self.hormiga.nivel_alcohol = 0
         self.hormiga.puntos = 0
         
+        # Actualizar puntuación y nivel de alcohol
+        self.label_puntuacion.config(text=f"Puntuación: {self.hormiga.puntos}")
+        self.label_alcohol.config(text=f"Nivel de alcohol: {self.hormiga.nivel_alcohol}")
+        
+        self.simulacion_activa = True
+        self.pausado = False
+        
+        # Actualizar visualización inicial
         self.actualizar_estado_hormiga()
         
         # Iniciar la ejecución de turnos
@@ -451,14 +443,9 @@ class Laberinto:
             return
 
         if self.indice_secuencia >= len(self.secuencia_actual):
-            # Fin de la secuencia actual
-            puntuacion_actual = self.calcular_puntuacion()
-            if puntuacion_actual > self.mejor_puntuacion:
-                self.mejor_puntuacion = puntuacion_actual
-                self.mejor_ruta = self.secuencia_actual
-                self.label_mejor.config(text=f"Mejor puntuación: {puntuacion_actual}")
-            
-            if self.intento_actual >= self.max_intentos:
+            if self.intento_actual < self.max_intentos:
+                self.ventana.after(1000, self.iniciar_nuevo_intento)
+            else:
                 self.finalizar_simulacion()
             return
 
@@ -468,10 +455,14 @@ class Laberinto:
 
         if accion == "comer":
             resultado = self.hormiga.interactuar_con_objeto(self)
-            self.actualizar_estado_hormiga()
+            # Actualizar etiquetas después de cada interacción
+            self.label_puntuacion.config(text=f"Puntuación: {self.hormiga.puntos}")
+            self.label_alcohol.config(text=f"Nivel de alcohol: {self.hormiga.nivel_alcohol}")
+            
             if resultado == "veneno":
                 self.restaurar_posiciones()
                 self.reiniciar_estados_hormiga()
+                self.ventana.after(1000, self.iniciar_nuevo_intento)
                 return
         else:
             nueva_posicion = self.hormiga.calcular_nueva_posicion(accion)
@@ -489,7 +480,19 @@ class Laberinto:
         self.ventana.after(500, self.ejecutar_turno)
 
     def calcular_puntuacion(self):
-        return (self.hormiga.puntos * 10) - (self.hormiga.nivel_alcohol * 5) - (self.indice_secuencia * 2)
+        # Ajustar los pesos según la importancia de cada factor
+        peso_movimientos = 2
+        peso_puntos = 1
+        peso_alcohol = 1.5
+        
+        # Calcular puntuación (los negativos son para minimizar movimientos y alcohol)
+        puntuacion = (
+            -peso_movimientos * self.indice_secuencia +  # Menos movimientos es mejor
+            peso_puntos * self.hormiga.puntos +          # Más puntos es mejor
+            -peso_alcohol * self.hormiga.nivel_alcohol    # Menos alcohol es mejor
+        )
+        
+        return puntuacion
 
     def registrar_exito(self):
         puntuacion = self.calcular_puntuacion()
@@ -498,28 +501,15 @@ class Laberinto:
             self.mejor_ruta = self.secuencia_actual[:self.indice_secuencia]
             self.label_mejor.config(text=f"Mejor puntuación: {puntuacion}")
         
-        messagebox.showinfo("¡Éxito!", 
-                          f"¡La hormiga llegó al final!\n"
-                          f"Puntos: {self.hormiga.puntos}\n"
-                          f"Nivel de alcohol: {self.hormiga.nivel_alcohol}\n"
-                          f"Pasos: {self.indice_secuencia}")
-        
-        # Restaurar el laberinto a su estado inicial
+        # Restaurar posiciones y estados
         self.restaurar_posiciones()
+        self.reiniciar_estados_hormiga()
         
-        # Reiniciar estados de la hormiga
-        self.hormiga.salud = 100
-        self.hormiga.nivel_alcohol = 0
-        self.hormiga.puntos = 0
-        
-        # Actualizar las etiquetas una sola vez después de reiniciar
-        try:
-            if hasattr(self, 'label_salud'):
-                self.label_salud.config(text=f"Salud: {self.hormiga.salud}")
-                self.label_alcohol.config(text=f"Alcohol: {self.hormiga.nivel_alcohol}")
-                self.label_puntos.config(text=f"Puntos: {self.hormiga.puntos}")
-        except tk.TclError:
-            pass  # Si las etiquetas no existen, simplemente continuamos
+        # Continuar con el siguiente intento con delay
+        if self.intento_actual < self.max_intentos:
+            self.ventana.after(1000, self.iniciar_nuevo_intento)  # 1 segundo entre intentos exitosos
+        else:
+            self.finalizar_simulacion()
 
     def reiniciar_estados_hormiga(self):
         # Reiniciar estados de la hormiga
@@ -538,76 +528,70 @@ class Laberinto:
     def finalizar_simulacion(self):
         self.simulacion_activa = False
         if self.mejor_ruta:
-            messagebox.showinfo("Simulación completada",
-                              f"Mejor puntuación: {self.mejor_puntuacion}\n"
-                              f"Encontrada en el intento: {self.intento_actual}")
+            mensaje = (
+                f"Simulación completada\n"
+                f"Mejor puntuación: {self.mejor_puntuacion}\n"
+                f"Encontrada en el intento: {self.intento_actual}\n"
+                f"Cantidad de movimientos: {len(self.mejor_ruta)}\n"
+                f"Puntos finales: {self.hormiga.puntos}\n"
+                f"Nivel de alcohol final: {self.hormiga.nivel_alcohol}"
+            )
+            messagebox.showinfo("Simulación completada", mensaje)
+            
+            # Mostrar la mejor ruta encontrada
+            self.mostrar_mejor_ruta()
         else:
             messagebox.showinfo("Simulación completada",
                               "No se encontró una ruta exitosa")
 
     def actualizar_estado_hormiga(self):
-        try:
-            # Si las etiquetas existen, actualizar sus valores
-            if hasattr(self, 'label_salud'):
-                self.label_salud.config(text=f"Salud: {self.hormiga.salud}")
-                self.label_alcohol.config(text=f"Alcohol: {self.hormiga.nivel_alcohol}")
-                self.label_puntos.config(text=f"Puntos: {self.hormiga.puntos}")
-        except tk.TclError:
-            # Si hay error al actualizar las etiquetas, crear nuevas
-            if hasattr(self, 'frame_estado'):
-                self.frame_estado.destroy()
-            
-            # Crear nuevo frame y etiquetas
-            self.frame_estado = tk.Frame(self.ventana)
-            self.frame_estado.grid(row=self.size+3, column=0, columnspan=self.size+1, pady=5)
-            
-            self.label_salud = tk.Label(self.frame_estado, text=f"Salud: {self.hormiga.salud}")
-            self.label_salud.pack(side=tk.LEFT, padx=5)
-            
-            self.label_alcohol = tk.Label(self.frame_estado, text=f"Alcohol: {self.hormiga.nivel_alcohol}")
-            self.label_alcohol.pack(side=tk.LEFT, padx=5)
-            
-            self.label_puntos = tk.Label(self.frame_estado, text=f"Puntos: {self.hormiga.puntos}")
-            self.label_puntos.pack(side=tk.LEFT, padx=5)
+        # Actualizar etiquetas con los valores actuales
+        self.label_puntuacion.config(text=f"Puntuación: {self.hormiga.puntos}")
+        self.label_alcohol.config(text=f"Nivel de alcohol: {self.hormiga.nivel_alcohol}")
 
     def generar_secuencia_movimientos(self):
         # Lista de posibles acciones
         acciones = ["arriba", "abajo", "izquierda", "derecha", "comer"]
         
-        # Generar una secuencia aleatoria de movimientos
-        # El tamaño de la secuencia puede ser ajustado según necesites
-        tam_secuencia = self.size * self.size * 2  # Por ejemplo, 2 veces el área del laberinto
+        # Generar una secuencia más corta para favorecer rutas eficientes
+        tam_secuencia = self.size * self.size  # Ajustar según necesidad
         
         secuencia = []
         for _ in range(tam_secuencia):
-            # Agregar una acción aleatoria a la secuencia
-            accion = random.choice(acciones)
+            # Dar más peso a los movimientos que a comer
+            if random.random() < 0.8:  # 80% de probabilidad de movimiento
+                accion = random.choice(["arriba", "abajo", "izquierda", "derecha"])
+            else:
+                accion = "comer"
             secuencia.append(accion)
         
         return secuencia
 
     def mover_hormiga(self, nueva_posicion):
+        # Validar que el movimiento sea a una posición adyacente
+        fila_actual, col_actual = self.posicion_actual
+        fila_nueva, col_nueva = nueva_posicion
+        
+        if abs(fila_nueva - fila_actual) > 1 or abs(col_nueva - col_actual) > 1:
+            return  # No permitir saltos
+        
         # Limpiar posición anterior
-        fila_actual, columna_actual = self.posicion_actual
-        boton_actual = self.ventana.grid_slaves(row=fila_actual, column=columna_actual+1)[0]
+        boton_actual = self.ventana.grid_slaves(row=fila_actual, column=col_actual+1)[0]
         boton_actual.config(image=self.imagenes['vacio'])
         boton_actual.image = self.imagenes['vacio']
         
         # Actualizar posición
         self.posicion_actual = nueva_posicion
-        fila_nueva, columna_nueva = nueva_posicion
+        self.hormiga.posicion = nueva_posicion
         
         # Actualizar visual en nueva posición
-        boton_nuevo = self.ventana.grid_slaves(row=fila_nueva, column=columna_nueva+1)[0]
+        boton_nuevo = self.ventana.grid_slaves(row=fila_nueva, column=col_nueva+1)[0]
         boton_nuevo.config(image=self.imagenes['hormiga'])
         boton_nuevo.image = self.imagenes['hormiga']
         
-        # Actualizar posición de la hormiga en la matriz
-        self.matriz_objetos[fila_actual][columna_actual] = None
-        self.matriz_objetos[fila_nueva][columna_nueva] = self.hormiga
-        
-        # Actualizar la posición de la hormiga
-        self.hormiga.posicion = nueva_posicion
+        # Actualizar matriz
+        self.matriz_objetos[fila_actual][col_actual] = None
+        self.matriz_objetos[fila_nueva][col_nueva] = self.hormiga
 
     def guardar_estado_inicial(self):
         # Guardar una copia del estado inicial de la matriz
@@ -670,6 +654,25 @@ class Laberinto:
             self.matriz_objetos[i][j] = objeto
             boton.info['tipo'] = tipo
             boton.info['objeto'] = objeto
+
+    def mostrar_mejor_ruta(self):
+        # Restaurar el laberinto al estado inicial
+        self.restaurar_posiciones()
+        self.reiniciar_estados_hormiga()
+        
+        # Reproducir la mejor ruta encontrada con más delay
+        for i, accion in enumerate(self.mejor_ruta):
+            self.ventana.after(1000 * i, lambda a=accion: self.ejecutar_accion(a))  # 1 segundo entre movimientos
+
+    def ejecutar_accion(self, accion):
+        if accion == "comer":
+            self.hormiga.interactuar_con_objeto(self)
+        else:
+            nueva_posicion = self.hormiga.calcular_nueva_posicion(accion)
+            if self.hormiga.es_movimiento_valido(nueva_posicion, self):
+                self.mover_hormiga(nueva_posicion)
+        
+        self.actualizar_estado_hormiga()
 
 if __name__ == "__main__":
     ventana = tk.Tk()

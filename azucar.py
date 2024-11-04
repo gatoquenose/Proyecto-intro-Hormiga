@@ -1,5 +1,5 @@
 class Azucar:
-    def __init__(self, puntos):
+    def __init__(self, puntos=200):
         self.puntos = puntos
         self.nombre = "azucar"
         self.imagen = "C:/Users/vdeag/OneDrive/Desktop/Repositorio intro/azucar.png"
