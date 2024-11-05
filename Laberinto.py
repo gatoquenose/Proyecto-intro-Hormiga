@@ -8,6 +8,8 @@ from azucar import Azucar
 import os
 import tkinter.messagebox as messagebox
 import random
+from estadistica import inicializar_grafico, actualizar_grafico, finalizar_grafico
+import matplotlib.pyplot as plt
 
 class Laberinto:
     def __init__(self, ventana):
@@ -31,6 +33,10 @@ class Laberinto:
         self.estado_inicial = None  # Para guardar el estado inicial del laberinto
         self.posiciones_iniciales = {}  # Para guardar las posiciones iniciales de los objetos
         self.simulacion_iniciada = False  # Nueva variable
+        self.soluciones_optimas = []  # Lista para guardar las mejores soluciones
+        self.soluciones_requeridas = 3  # Número de soluciones óptimas requeridas
+        self.max_intentos = 1000  # Aumentamos el número máximo de intentos
+        self.puntajes = []  # Lista para almacenar los puntajes de cada generación
 
     def configurar_ventana_principal(self):
         self.ventana.geometry(f"{self.ANCHO_VENTANA}x{self.ALTO_VENTANA}")
@@ -63,11 +69,17 @@ class Laberinto:
         button_width = 10
         button_height = 3
 
-        boton_tamaño = tk.Button(self.ventana, text="INICIO", font=("Arial", 16), command=self.abrir_tamaño, bg="blue", fg="white", width=button_width, height=button_height)
+        boton_tamaño = tk.Button(
+            self.ventana, 
+            text="INICIO", 
+            font=("Arial", 16), 
+            command=self.abrir_tamaño, 
+            bg="blue", 
+            fg="white", 
+            width=button_width, 
+            height=button_height
+        )
         boton_tamaño.grid(row=1, column=1, padx=10, pady=10, sticky="nsew")
-
-        boton_estadisticas = tk.Button(self.ventana, text="Estadísticas", font=("Arial", 16), command=self.estadisticas, bg="blue", fg="white", width=button_width, height=button_height)
-        boton_estadisticas.grid(row=2, column=1, padx=10, pady=10, sticky="nsew")
 
     def abrir_tamaño(self):
         self.ventana.withdraw()
@@ -263,16 +275,71 @@ class Laberinto:
         return self.matriz_objetos[fila][columna]
 
     def estadisticas(self):
-        self.ventana.withdraw()
         ventana_estadisticas = tk.Toplevel()
         ventana_estadisticas.geometry(f"{self.ANCHO_VENTANA}x{self.ALTO_VENTANA}")
         ventana_estadisticas.title("Estadísticas")
 
-        label = tk.Label(ventana_estadisticas, text="Estadísticas", font=("Arial", 24))
-        label.grid(row=0, column=0, columnspan=5, padx=10, pady=10, sticky="nsew")
+        # Frame principal para organizar elementos
+        frame_principal = tk.Frame(ventana_estadisticas)
+        frame_principal.pack(expand=True, fill='both', padx=20, pady=20)
 
-        boton_volver = tk.Button(ventana_estadisticas, text="Volver", font=("Arial", 16), command=lambda: self.volver_a_principal(ventana_estadisticas), bg="red", fg="white", width=10, height=3)
-        boton_volver.grid(row=4, column=2, padx=10, pady=10, sticky="nsew")
+        # Título
+        label = tk.Label(frame_principal, text="Estadísticas", font=("Arial", 24))
+        label.pack(pady=10)
+
+        # Frame para información de puntajes
+        frame_info = tk.Frame(frame_principal)
+        frame_info.pack(pady=10)
+
+        if self.puntajes:
+            label_max = tk.Label(frame_info, text=f"Puntaje máximo: {max(self.puntajes)}", font=("Arial", 12))
+            label_max.pack()
+            label_min = tk.Label(frame_info, text=f"Puntaje mínimo: {min(self.puntajes)}", font=("Arial", 12))
+            label_min.pack()
+            if len(self.puntajes) > 0:
+                promedio = sum(self.puntajes) / len(self.puntajes)
+                label_prom = tk.Label(frame_info, text=f"Puntaje promedio: {promedio:.2f}", font=("Arial", 12))
+                label_prom.pack()
+
+        # Frame para botones
+        frame_botones = tk.Frame(frame_principal)
+        frame_botones.pack(pady=20)
+
+        # Botón para mostrar gráfico
+        boton_mostrar = tk.Button(
+            frame_botones,
+            text="Mostrar Gráfico",
+            font=("Arial", 12),
+            command=self.mostrar_grafico_estadisticas,
+            bg="blue",
+            fg="white"
+        )
+        boton_mostrar.pack(side=tk.LEFT, padx=10)
+
+        # Botón volver
+        boton_volver = tk.Button(
+            frame_botones,
+            text="Volver",
+            font=("Arial", 12),
+            command=ventana_estadisticas.destroy,
+            bg="red",
+            fg="white"
+        )
+        boton_volver.pack(side=tk.LEFT, padx=10)
+
+    def mostrar_grafico_estadisticas(self):
+        if not self.puntajes:
+            messagebox.showinfo("Sin datos", "No hay datos de puntajes disponibles para mostrar.")
+            return
+        
+        # Crear una nueva figura para el gráfico
+        plt.figure(figsize=(8, 6))
+        plt.plot(range(1, len(self.puntajes) + 1), self.puntajes, 'b-', marker='o')
+        plt.xlabel('Intentos')
+        plt.ylabel('Puntaje')
+        plt.title('Evolución del Puntaje por Intento')
+        plt.grid(True)
+        plt.show()
 
     def validar_laberinto(self):
         elementos_requeridos = {
@@ -372,35 +439,60 @@ class Laberinto:
         self.label_alcohol = tk.Label(frame_controles, text="Nivel de alcohol: 0")
         self.label_alcohol.pack(side=tk.LEFT, padx=5)
 
+        self.boton_estadisticas = tk.Button(
+            frame_controles,
+            text="Ver Estadísticas",
+            command=lambda: actualizar_grafico(self.puntajes)
+        )
+        self.boton_estadisticas.pack(side=tk.LEFT, padx=5)
+
     def iniciar_nuevo_intento(self):
-        # Restaurar el laberinto al estado inicial
-        self.restaurar_posiciones()
+        # Detener cualquier movimiento en curso
+        self.simulacion_activa = False
         
-        # Asegurarse de que la posición actual sea la inicial
-        self.posicion_actual = self.posicion_inicial
-        self.hormiga.posicion = self.posicion_inicial
+        # Limpiar TODAS las hormigas del tablero
+        for i in range(self.size):
+            for j in range(self.size):
+                if isinstance(self.matriz_objetos[i][j], Hormiga):
+                    boton = self.ventana.grid_slaves(row=i, column=j+1)[0]
+                    boton.config(image=self.imagenes['vacio'])
+                    boton.image = self.imagenes['vacio']
+                    self.matriz_objetos[i][j] = None
+                    boton.info = {'tipo': 'vacio', 'objeto': None}
+        
+        # Restaurar solo la hormiga en su posición inicial
+        posicion_inicial = None
+        for (i, j), datos in self.posiciones_iniciales.items():
+            if datos['tipo'] == 'hormiga':
+                posicion_inicial = (i, j)
+                boton = self.ventana.grid_slaves(row=i, column=j+1)[0]
+                self.hormiga = Hormiga(posicion=(i, j))
+                boton.config(image=self.imagenes['hormiga'])
+                boton.image = self.imagenes['hormiga']
+                self.matriz_objetos[i][j] = self.hormiga
+                boton.info = {'tipo': 'hormiga', 'objeto': self.hormiga}
+                self.posicion_actual = (i, j)
+                break
         
         self.intento_actual += 1
         self.label_intento.config(text=f"Intento: {self.intento_actual}")
-        
-        # Generar nueva secuencia de movimientos
-        self.secuencia_actual = self.generar_secuencia_movimientos()
-        self.indice_secuencia = 0
         
         # Reiniciar estados de la hormiga
         self.hormiga.salud = 100
         self.hormiga.nivel_alcohol = 0
         self.hormiga.puntos = 0
         
-        # Actualizar puntuación y nivel de alcohol
+        # Actualizar etiquetas
         self.label_puntuacion.config(text=f"Puntuación: {self.hormiga.puntos}")
         self.label_alcohol.config(text=f"Nivel de alcohol: {self.hormiga.nivel_alcohol}")
         
+        # Generar nueva secuencia de movimientos
+        self.secuencia_actual = self.generar_secuencia_movimientos()
+        self.indice_secuencia = 0
+        
+        # Reactivar la simulación
         self.simulacion_activa = True
         self.pausado = False
-        
-        # Actualizar visualización inicial
-        self.actualizar_estado_hormiga()
         
         # Iniciar la ejecución de turnos
         self.ejecutar_turno()
@@ -442,39 +534,27 @@ class Laberinto:
         if not self.simulacion_activa or self.pausado:
             return
 
-        if self.indice_secuencia >= len(self.secuencia_actual):
-            if self.intento_actual < self.max_intentos:
-                self.ventana.after(1000, self.iniciar_nuevo_intento)
-            else:
-                self.finalizar_simulacion()
+        # Verificar si ya tenemos suficientes soluciones óptimas
+        if len(self.soluciones_optimas) >= self.soluciones_requeridas:
+            self.finalizar_simulacion()
             return
 
+        if self.intento_actual >= self.max_intentos:
+            self.finalizar_simulacion()
+            return
+
+        if self.indice_secuencia >= len(self.secuencia_actual):
+            # Si se acabaron los movimientos, generar más
+            self.secuencia_actual.extend(self.generar_secuencia_movimientos())
+        
         # Ejecutar siguiente movimiento
         accion = self.secuencia_actual[self.indice_secuencia]
         self.indice_secuencia += 1
 
-        if accion == "comer":
-            resultado = self.hormiga.interactuar_con_objeto(self)
-            # Actualizar etiquetas después de cada interacción
-            self.label_puntuacion.config(text=f"Puntuación: {self.hormiga.puntos}")
-            self.label_alcohol.config(text=f"Nivel de alcohol: {self.hormiga.nivel_alcohol}")
-            
-            if resultado == "veneno":
-                self.restaurar_posiciones()
-                self.reiniciar_estados_hormiga()
-                self.ventana.after(1000, self.iniciar_nuevo_intento)
-                return
-        else:
-            nueva_posicion = self.hormiga.calcular_nueva_posicion(accion)
-            if self.hormiga.es_movimiento_valido(nueva_posicion, self):
-                self.mover_hormiga(nueva_posicion)
-                self.actualizar_estado_hormiga()
-
-        # Verificar si llegó al final
-        fila, columna = self.posicion_actual
-        if self.matriz_objetos[fila][columna] == 'final':
-            self.registrar_exito()
-            return
+        # Procesar el movimiento
+        nueva_posicion = self.hormiga.calcular_nueva_posicion(accion)
+        if self.hormiga.es_movimiento_valido(nueva_posicion, self):
+            self.mover_hormiga(nueva_posicion)
 
         # Programar siguiente movimiento
         self.ventana.after(500, self.ejecutar_turno)
@@ -527,22 +607,19 @@ class Laberinto:
 
     def finalizar_simulacion(self):
         self.simulacion_activa = False
-        if self.mejor_ruta:
-            mensaje = (
-                f"Simulación completada\n"
-                f"Mejor puntuación: {self.mejor_puntuacion}\n"
-                f"Encontrada en el intento: {self.intento_actual}\n"
-                f"Cantidad de movimientos: {len(self.mejor_ruta)}\n"
-                f"Puntos finales: {self.hormiga.puntos}\n"
-                f"Nivel de alcohol final: {self.hormiga.nivel_alcohol}"
-            )
-            messagebox.showinfo("Simulación completada", mensaje)
-            
-            # Mostrar la mejor ruta encontrada
-            self.mostrar_mejor_ruta()
-        else:
-            messagebox.showinfo("Simulación completada",
-                              "No se encontró una ruta exitosa")
+        
+        # Mostrar las mejores soluciones encontradas
+        mensaje = "Mejores soluciones encontradas:\n\n"
+        for i, solucion in enumerate(self.soluciones_optimas, 1):
+            mensaje += f"Solución {i}:\n"
+            mensaje += f"Puntuación: {solucion['puntos']}\n"
+            mensaje += f"Movimientos: {solucion['movimientos']}\n"
+            mensaje += f"Nivel de alcohol: {solucion['alcohol']}\n\n"
+        
+        messagebox.showinfo("Simulación completada", mensaje)
+        
+        # Mostrar el gráfico final
+        finalizar_grafico()
 
     def actualizar_estado_hormiga(self):
         # Actualizar etiquetas con los valores actuales
@@ -568,12 +645,18 @@ class Laberinto:
         return secuencia
 
     def mover_hormiga(self, nueva_posicion):
-        # Validar que el movimiento sea a una posición adyacente
         fila_actual, col_actual = self.posicion_actual
         fila_nueva, col_nueva = nueva_posicion
         
-        if abs(fila_nueva - fila_actual) > 1 or abs(col_nueva - col_actual) > 1:
-            return  # No permitir saltos
+        # Validar que el movimiento sea a una casilla adyacente
+        if (abs(fila_nueva - fila_actual) > 1 or 
+            abs(col_nueva - col_actual) > 1 or
+            (abs(fila_nueva - fila_actual) == 1 and abs(col_nueva - col_actual) == 1)):  # Evitar movimientos diagonales
+            return
+        
+        # Verificar que no haya otra hormiga en la nueva posición
+        if isinstance(self.matriz_objetos[fila_nueva][col_nueva], Hormiga):
+            return
         
         # Limpiar posición anterior
         boton_actual = self.ventana.grid_slaves(row=fila_actual, column=col_actual+1)[0]
@@ -589,9 +672,74 @@ class Laberinto:
         boton_nuevo.config(image=self.imagenes['hormiga'])
         boton_nuevo.image = self.imagenes['hormiga']
         
+        # Verificar si hay objeto en la nueva posición
+        objeto = self.matriz_objetos[fila_nueva][col_nueva]
+        
+        if isinstance(objeto, (Azucar, Vino)):
+            resultado = self.hormiga.interactuar_con_objeto(self)
+            self.label_puntuacion.config(text=f"Puntuación: {self.hormiga.puntos}")
+            self.label_alcohol.config(text=f"Nivel de alcohol: {self.hormiga.nivel_alcohol}")
+        
+        elif isinstance(objeto, Veneno):
+            # Iniciar nuevo intento si toca veneno
+            self.intento_actual += 1
+            self.label_intento.config(text=f"Intento: {self.intento_actual}")
+            self.restaurar_posiciones()
+            self.reiniciar_estados_hormiga()
+            self.secuencia_actual = self.generar_secuencia_movimientos()
+            self.indice_secuencia = 0
+            return
+        
+        elif objeto == 'final':
+            # Evaluar solución y comenzar nuevo intento si llega al final
+            self.evaluar_solucion()
+            self.intento_actual += 1
+            self.label_intento.config(text=f"Intento: {self.intento_actual}")
+            self.restaurar_posiciones()
+            self.reiniciar_estados_hormiga()
+            self.secuencia_actual = self.generar_secuencia_movimientos()
+            self.indice_secuencia = 0
+            return
+        
         # Actualizar matriz
         self.matriz_objetos[fila_actual][col_actual] = None
         self.matriz_objetos[fila_nueva][col_nueva] = self.hormiga
+
+    def evaluar_solucion(self):
+        # Calcular puntuación total del intento
+        puntuacion_total = self.hormiga.puntos - (self.indice_secuencia * 2) - (self.hormiga.nivel_alcohol * 1.5)
+        
+        # Agregar puntuación a la lista de puntajes
+        self.puntajes.append(puntuacion_total)
+        
+        solucion_actual = {
+            'movimientos': self.indice_secuencia,
+            'puntos': self.hormiga.puntos,
+            'alcohol': self.hormiga.nivel_alcohol,
+            'ruta': self.secuencia_actual[:self.indice_secuencia]
+        }
+        
+        # Evaluar si esta solución es mejor que alguna existente
+        if len(self.soluciones_optimas) < self.soluciones_requeridas:
+            self.soluciones_optimas.append(solucion_actual)
+            self.soluciones_optimas.sort(key=lambda x: (
+                -x['puntos'],  # Mayor puntuación primero
+                x['movimientos'],  # Menos movimientos mejor
+                x['alcohol']  # Menor alcohol mejor
+            ))
+        else:
+            # Comparar con la peor solución actual
+            peor_solucion = self.soluciones_optimas[-1]
+            if (solucion_actual['puntos'] > peor_solucion['puntos'] or 
+                    (solucion_actual['puntos'] == peor_solucion['puntos'] and 
+                     (solucion_actual['movimientos'] < peor_solucion['movimientos'] or 
+                      solucion_actual['alcohol'] < peor_solucion['alcohol']))):
+                self.soluciones_optimas[-1] = solucion_actual
+                self.soluciones_optimas.sort(key=lambda x: (
+                    -x['puntos'],
+                    x['movimientos'],
+                    x['alcohol']
+                ))
 
     def guardar_estado_inicial(self):
         # Guardar una copia del estado inicial de la matriz
@@ -639,21 +787,19 @@ class Laberinto:
                 boton.config(image=self.imagenes['vacio'])
                 boton.image = self.imagenes['vacio']
                 self.matriz_objetos[i][j] = None
-                boton.info['tipo'] = 'vacio'
-                boton.info['objeto'] = None
+                boton.info = {'tipo': 'vacio', 'objeto': None}
 
-        # Luego restauramos los objetos a sus posiciones iniciales
+        # Restaurar objetos excepto la hormiga
         for (i, j), datos in self.posiciones_iniciales.items():
-            boton = self.ventana.grid_slaves(row=i, column=j+1)[0]
-            tipo = datos['tipo']
-            objeto = datos['objeto']
-            
-            # Usar el tipo para obtener la imagen correcta
-            boton.config(image=self.imagenes[tipo])
-            boton.image = self.imagenes[tipo]
-            self.matriz_objetos[i][j] = objeto
-            boton.info['tipo'] = tipo
-            boton.info['objeto'] = objeto
+            if datos['tipo'] != 'hormiga':  # Skip hormiga restoration
+                boton = self.ventana.grid_slaves(row=i, column=j+1)[0]
+                tipo = datos['tipo']
+                objeto = datos['objeto']
+                
+                boton.config(image=self.imagenes[tipo])
+                boton.image = self.imagenes[tipo]
+                self.matriz_objetos[i][j] = objeto
+                boton.info = {'tipo': tipo, 'objeto': objeto}
 
     def mostrar_mejor_ruta(self):
         # Restaurar el laberinto al estado inicial

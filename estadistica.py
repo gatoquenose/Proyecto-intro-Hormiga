@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-
 # Inicializa el gráfico
 def inicializar_grafico():
     plt.ion()  # Habilitar modo interactivo
