@@ -1,10 +1,6 @@
 import matplotlib.pyplot as plt
-<<<<<<< HEAD
-# Inicializa el gráfico
-=======
 import numpy as np
 
->>>>>>> 4e80938b71f12f7a64f4426eeb8ef1992d55b1a6
 def inicializar_grafico():
     plt.ion()  # Habilita modo interactivo
     # Crear dos subplots: uno para puntajes y otro para tiempos
